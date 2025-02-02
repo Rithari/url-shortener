@@ -30,7 +30,7 @@ public class UserController {
      */
     @PostMapping
     public ResponseEntity<User> createUser(@RequestBody UserRequest userRequest) {
-        if (userRequest.getEmail() == null || userRequest.getEmail().isBlank() || !isValidEmail(userRequest.getEmail())) {
+        if (userRequest.getEmail() == null || userRequest.getEmail().isBlank() || isInvalidEmail(userRequest.getEmail())) {
             return ResponseEntity.badRequest().body(null);
         }
 
@@ -44,13 +44,13 @@ public class UserController {
      * @param email The email to validate.
      * @return True if the email is valid, false otherwise.
      */
-    private boolean isValidEmail(String email) {
+    private boolean isInvalidEmail(String email) {
         if (email == null || email.isBlank()) {
-            return false;
+            return true;
         }
 
         String regex = "^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$"; // thanks copilot
-        return email.matches(regex);
+        return !email.matches(regex);
     }
 
     /**
@@ -89,7 +89,7 @@ public class UserController {
     @PostMapping("/login")
     public ResponseEntity<User> loginUser(@RequestBody UserRequest userRequest) {
         // Checking the email validity helps with database overhead
-        if (userRequest.getEmail() == null || userRequest.getEmail().isBlank() || !isValidEmail(userRequest.getEmail())) {
+        if (userRequest.getEmail() == null || userRequest.getEmail().isBlank() || isInvalidEmail(userRequest.getEmail())) {
             return ResponseEntity.badRequest().body(null);
         }
 

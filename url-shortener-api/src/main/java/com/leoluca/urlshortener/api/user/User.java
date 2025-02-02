@@ -3,7 +3,6 @@ package com.leoluca.urlshortener.api.user;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.aggregation.ConvertOperators;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.bson.types.ObjectId;
 import java.util.Date;
@@ -29,6 +28,7 @@ public class User {
     }
 
     // Getters and setters
+    // TODO actually use this
     public ObjectId getUserId() {
         return userId;
     }

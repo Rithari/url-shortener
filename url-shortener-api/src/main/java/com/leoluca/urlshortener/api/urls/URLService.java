@@ -70,7 +70,7 @@ public class URLService {
         Random random = new Random();
         StringBuilder shortCode;
 
-        while (true) {
+        do {
             // Generate a random 7-character string
             shortCode = new StringBuilder();
             for (int i = 0; i < 7; i++) {
@@ -79,10 +79,7 @@ public class URLService {
             }
 
             // Ensure the generated code doesn't already exist in the database
-            if (urlRepository.findByShortCode(shortCode.toString()).isEmpty()) {
-                break;
-            }
-        }
+        } while (urlRepository.findByShortCode(shortCode.toString()).isPresent());
 
         return shortCode.toString();
     }
