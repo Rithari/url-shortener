@@ -1,4 +1,4 @@
-package com.leoluca.urlshortener.api.urls;
+package com.leoluca.urlshortener.api.url;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

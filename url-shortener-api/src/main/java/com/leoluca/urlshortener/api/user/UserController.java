@@ -1,7 +1,7 @@
 package com.leoluca.urlshortener.api.user;
 
-import com.leoluca.urlshortener.api.urls.URL;
-import com.leoluca.urlshortener.api.urls.URLService;
+import com.leoluca.urlshortener.api.url.URL;
+import com.leoluca.urlshortener.api.url.URLService;
 import org.bson.types.ObjectId;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -1,4 +1,4 @@
-package com.leoluca.urlshortener.api.urls;
+package com.leoluca.urlshortener.api.url;
 
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.repository.MongoRepository;
