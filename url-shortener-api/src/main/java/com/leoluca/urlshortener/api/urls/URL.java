@@ -11,7 +11,7 @@ public class URL {
 
     @Id
     private String id; // mongodb ObjectId
-
+    private int hitCount = 0; // Number of times this URL has been accessed
     private String longUrl; // The original URL
     private String shortCode; // The generated 7-character short code
     private ObjectId userId; // objectId of the user who created this short URL
@@ -65,5 +65,9 @@ public class URL {
 
     public void setCreatedAt(Date createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public int getHitCount() {
+        return hitCount;
     }
 }

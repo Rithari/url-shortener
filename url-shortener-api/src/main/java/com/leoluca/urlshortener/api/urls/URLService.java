@@ -1,6 +1,9 @@
 package com.leoluca.urlshortener.api.urls;
 
 import org.bson.types.ObjectId;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
@@ -12,11 +15,25 @@ import java.util.Random;
 public class URLService {
 
     private final URLRepository urlRepository;
-
+    private final RedisTemplate<String, String> redisTemplate;
     private static final String BASE62_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
-    public URLService(URLRepository urlRepository) {
+    public URLService(URLRepository urlRepository, RedisTemplate<String, String> redisTemplate) {
         this.urlRepository = urlRepository;
+        this.redisTemplate = redisTemplate;
+    }
+
+    // This annotation guarantees that the method will be executed after the application context has been initialized
+    // PostConstruct would typically run midway through the startup process.
+    @EventListener(ApplicationReadyEvent.class)
+    public void preloadCache() {
+        System.out.println("Preloading cache...");
+        List<URL> urls = urlRepository.findTop10ByOrderByHitCountDesc(); // Get the top 10 most accessed URLs
+        for (URL url : urls) {
+            String redisKey = "shortUrls::" + url.getShortCode();
+            redisTemplate.opsForValue().set(redisKey, url.getLongUrl());
+            // System.out.println("Added to cache: " + redisKey);
+        }
     }
 
     /**
@@ -52,13 +69,28 @@ public class URLService {
      * @return The original long URL.
      */
     public String resolveShortCode(String shortCode) {
-        Optional<URL> url = urlRepository.findByShortCode(shortCode);
+        System.out.println("Attempting to resolve shortCode: " + shortCode);
 
-        if (url.isPresent()) {
-            return url.get().getLongUrl();
+        String redisKey = "shortUrls::" + shortCode;
+        String cachedLongUrl = redisTemplate.opsForValue().get(redisKey);
+
+        if (cachedLongUrl != null) {
+            System.out.println("Cache hit! Retrieved from Redis: " + cachedLongUrl);
+        } else {
+            System.out.println("Cache miss! Retrieving from MongoDB...");
+            cachedLongUrl = urlRepository.findByShortCode(shortCode)
+                    .map(URL::getLongUrl)
+                    .orElseThrow(() -> new RuntimeException("Short code not found in MongoDB: " + shortCode));
+
+            // Store it back in Redis for future use
+            redisTemplate.opsForValue().set(redisKey, cachedLongUrl);
         }
 
-        throw new RuntimeException("Short code not found: " + shortCode);
+        // hitCount is not a field in the URL class, but it is in the database so we use the repository to increment it
+        urlRepository.incrementHitCount(shortCode);
+        System.out.println("Incremented hit count for shortCode: " + shortCode);
+
+        return cachedLongUrl;
     }
 
     /**
