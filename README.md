@@ -4,7 +4,7 @@ This project was done during a weekend to learn and freshen up previously used t
 The stack used is:
 * C# Console App for the user facing interface to interact with the API
 * Java Spring Boot API which interacts with the Object Storage MongoDB to handle URL and User operations
-* Redis to cache frequent request to prevent database overhead and shorten lookup times (nost just links :) )
+* Redis to cache frequent request to prevent database overhead and shorten lookup times (not just links :) )
 * WIP: Docker to containerise and deploy this locally anywhere
 
 
