@@ -71,7 +71,7 @@ public class URLController {
             String longUrl = urlService.resolveShortCode(shortCode);
 
             // Return an HTTP 302 redirect to the original URL
-            return ResponseEntity.status(HttpStatus.FOUND)
+            return ResponseEntity.status(HttpStatus.FOUND) // For some reason this returns 200
                     .header("Location", longUrl)
                     .build();
         } catch (RuntimeException e) {
