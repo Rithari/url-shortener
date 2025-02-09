@@ -160,7 +160,7 @@ class Program
             Console.WriteLine("Your URLs:");
             foreach (var url in urls)
             {
-                Console.WriteLine($"Short: swisscom.com/{url.shortCode} -> {url.longUrl}");
+                Console.WriteLine($"swisscom.com/{url.shortCode} -> {url.longUrl}");
             }
         }
         else
@@ -184,7 +184,6 @@ class Program
         string json = JsonSerializer.Serialize(requestBody);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        Console.WriteLine("Sending request to shorten URL...");
         Console.WriteLine($"Request Body: {json}");
 
         HttpResponseMessage response = await Client.PostAsync($"{BaseUrl}/urls/shorten", content);
@@ -214,15 +213,10 @@ class Program
         }
 
         string shortCode = fullShortUrl.Split("/")[^1]; // Extract short code from URL
-
-        Console.WriteLine($"Extracted short code: {shortCode}");
-        Console.WriteLine($"Sending request to resolve: {BaseUrl}/urls/{shortCode}");
-
+        
         HttpResponseMessage response = await Client.GetAsync($"{BaseUrl}/urls/{shortCode}");
         string responseData = await response.Content.ReadAsStringAsync();
-
-        Console.WriteLine($"Response Code: {response.StatusCode}");
-
+        
         if (response.StatusCode == System.Net.HttpStatusCode.Found)
         {
             if (response.Headers.Location != null)
@@ -264,7 +258,7 @@ class Program
             Console.WriteLine("All URLs:");
             foreach (var url in urls)
             {
-                Console.WriteLine($"Short: swisscom.com/{url.shortCode} -> {url.longUrl}");
+                Console.WriteLine($"swisscom.com/{url.shortCode} -> {url.longUrl}");
             }
         }
         else
