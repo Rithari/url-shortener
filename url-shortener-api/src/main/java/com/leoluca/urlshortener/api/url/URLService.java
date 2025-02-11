@@ -1,10 +1,16 @@
 package com.leoluca.urlshortener.api.url;
 
+import com.leoluca.urlshortener.api.url.exception.UrlCreationException;
+import com.leoluca.urlshortener.api.url.exception.UrlNotFoundException;
+import com.leoluca.urlshortener.api.url.exception.UrlResolutionException;
+import com.leoluca.urlshortener.api.url.exception.UrlRetrievalException;
 import org.bson.types.ObjectId;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Date;
 import java.util.List;
@@ -13,6 +19,8 @@ import java.util.Random;
 
 @Service
 public class URLService {
+
+    private static final Logger logger = LoggerFactory.getLogger(URLService.class);
 
     private final URLRepository urlRepository;
     private final RedisTemplate<String, String> redisTemplate;
@@ -24,15 +32,19 @@ public class URLService {
     }
 
     // This annotation guarantees that the method will be executed after the application context has been initialized
-    // PostConstruct would typically run midway through the startup process.
+    // PostConstruct would typically run midway through the startup process and therefore may cause issues.
     @EventListener(ApplicationReadyEvent.class)
     public void preloadCache() {
-        System.out.println("Preloading cache...");
-        List<URL> urls = urlRepository.findTop10ByOrderByHitCountDesc(); // Get the top 10 most accessed URLs
-        for (URL url : urls) {
-            String redisKey = "shortUrls::" + url.getShortCode();
-            redisTemplate.opsForValue().set(redisKey, url.getLongUrl());
-            // System.out.println("Added to cache: " + redisKey);
+        logger.info("Preloading cache with top 10 most clicked URLs...");
+        try {
+            List<URL> urls = urlRepository.findTop10ByOrderByHitCountDesc(); // Get the top 10 most clicked URLs
+            for (URL url : urls) {
+                String redisKey = "shortUrls::" + url.getShortCode();
+                redisTemplate.opsForValue().set(redisKey, url.getLongUrl());
+                logger.info("Cached URL: {}", redisKey);
+            }
+        } catch (Exception e) {
+            logger.error("Failed to preload cache: {}", e.getMessage(), e);
         }
     }
 
@@ -43,23 +55,27 @@ public class URLService {
      * @return The generated short code.
      */
     public String saveShortUrl(String longUrl, ObjectId userId) {
-        Optional<URL> existingUrl = urlRepository.findByLongUrl(longUrl);
-        if (existingUrl.isPresent()) {
-            return existingUrl.get().getShortCode();
+        try {
+            Optional<URL> existingUrl = urlRepository.findByLongUrl(longUrl);
+            if (existingUrl.isPresent()) {
+                return existingUrl.get().getShortCode();
+            }
+
+            // Create the short URL object
+            String shortCode = encodeURL();
+            URL url = new URL();
+            url.setLongUrl(longUrl);
+            url.setShortCode(shortCode);
+            url.setUserId(userId);
+            url.setCreatedAt(new Date());
+
+            urlRepository.save(url);
+            logger.info("Created short URL: {} -> {}", shortCode, longUrl);
+            return shortCode;
+        } catch (Exception e) {
+            logger.error("Error saving short URL: {}", e.getMessage(), e);
+            throw new UrlCreationException("Could not shorten the URL", e);
         }
-
-        String shortCode = encodeURL();
-
-        // Create a new URL object with the given long URL and generated short code
-        URL url = new URL();
-        url.setLongUrl(longUrl);
-        url.setShortCode(shortCode);
-        url.setUserId(userId);
-        url.setCreatedAt(new Date());
-
-        urlRepository.save(url);
-
-        return shortCode;
     }
 
     /**
@@ -69,58 +85,93 @@ public class URLService {
      * @return The original long URL.
      */
     public String resolveShortCode(String shortCode) {
-        System.out.println("Attempting to resolve shortCode: " + shortCode);
-
+        logger.info("Resolving short code: {}", shortCode);
         String redisKey = "shortUrls::" + shortCode;
-        String cachedLongUrl = redisTemplate.opsForValue().get(redisKey);
 
-        if (cachedLongUrl != null) {
-            System.out.println("Cache hit! Retrieved from Redis: " + cachedLongUrl);
-        } else {
-            System.out.println("Cache miss! Retrieving from MongoDB...");
+        try {
+            // Check cache first
+            String cachedLongUrl = redisTemplate.opsForValue().get(redisKey);
+            if (cachedLongUrl != null) {
+                logger.info("Cache hit for {}", shortCode);
+                return cachedLongUrl;
+            }
+
+            // Retrieve from database
+            logger.info("Cache miss for {}. Querying MongoDB...", shortCode);
             cachedLongUrl = urlRepository.findByShortCode(shortCode)
                     .map(URL::getLongUrl)
-                    .orElseThrow(() -> new RuntimeException("Short code not found in MongoDB: " + shortCode));
+                    .orElseThrow(() -> new UrlNotFoundException("Short URL not found: " + shortCode));
 
-            // Store it back in Redis for future use
-            redisTemplate.opsForValue().set(redisKey, cachedLongUrl);
+            // Store in cache
+            redisTemplate.opsForValue().set(redisKey, cachedLongUrl); // opsforValue is basically the SET command
+            logger.info("Cached {} in Redis", shortCode);
+
+            // Increment hit count
+            urlRepository.incrementHitCount(shortCode);
+            logger.info("Incremented hit count for {}", shortCode);
+
+            return cachedLongUrl;
+        } catch (UrlNotFoundException e) {
+            logger.warn("URL not found: {}", shortCode);
+            throw e;
+        } catch (Exception e) {
+            logger.error("Error resolving short code {}: {}", shortCode, e.getMessage(), e);
+            throw new UrlResolutionException("Error resolving short URL: " + shortCode, e);
         }
-
-        // hitCount is not a field in the URL class, but it is in the database so we use the repository to increment it
-        urlRepository.incrementHitCount(shortCode);
-        System.out.println("Incremented hit count for shortCode: " + shortCode);
-
-        return cachedLongUrl;
     }
 
     /**
-     * Generates a unique 7-character alphanumeric short code using Base62 encoding.
+     * Generates a unique 7-character short code for a URL.
      *
-     * @return A randomly generated short code.
+     * @return The generated short code.
      */
     private String encodeURL() {
         Random random = new Random();
         StringBuilder shortCode;
 
-        do {
-            // Generate a random 7-character string
-            shortCode = new StringBuilder();
-            for (int i = 0; i < 7; i++) {
-                int index = random.nextInt(BASE62_CHARACTERS.length());
-                shortCode.append(BASE62_CHARACTERS.charAt(index));
-            }
+        try {
+            do {
+                shortCode = new StringBuilder();
+                for (int i = 0; i < 7; i++) {
+                    int index = random.nextInt(BASE62_CHARACTERS.length());
+                    shortCode.append(BASE62_CHARACTERS.charAt(index));
+                }
+            } while (urlRepository.findByShortCode(shortCode.toString()).isPresent());
+            // Keep generating short codes until we find one that doesn't already exist
 
-            // Ensure the generated code doesn't already exist in the database
-        } while (urlRepository.findByShortCode(shortCode.toString()).isPresent());
-
-        return shortCode.toString();
+            return shortCode.toString();
+        } catch (Exception e) {
+            logger.error("Error generating short code: {}", e.getMessage(), e);
+            throw new UrlCreationException("Error generating short code", e);
+        }
     }
 
+    /**
+     * Retrieves all URLs created by a specific user.
+     *
+     * @param userId The ID of the user to retrieve URLs for.
+     * @return A list of URLs created by the user.
+     */
     public List<URL> getUrlsByUserId(ObjectId userId) {
-        return urlRepository.findByUserId(userId);
+        try {
+            return urlRepository.findByUserId(userId);
+        } catch (Exception e) {
+            logger.error("Error retrieving URLs for user {}: {}", userId, e.getMessage(), e);
+            throw new UrlRetrievalException("Error retrieving URLs for user", e);
+        }
     }
 
+    /**
+     * Retrieves all URLs in the database.
+     *
+     * @return A list of all URLs.
+     */
     public Iterable<URL> getAllUrls() {
-        return urlRepository.findAll();
+        try {
+            return urlRepository.findAll();
+        } catch (Exception e) {
+            logger.error("Error retrieving all URLs: {}", e.getMessage(), e);
+            throw new UrlRetrievalException("Error retrieving all URLs", e);
+        }
     }
 }
