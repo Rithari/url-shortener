@@ -1,9 +1,6 @@
 package com.leoluca.urlshortener.api.url;
 
-import com.leoluca.urlshortener.api.url.exception.UrlCreationException;
-import com.leoluca.urlshortener.api.url.exception.UrlNotFoundException;
-import com.leoluca.urlshortener.api.url.exception.UrlResolutionException;
-import com.leoluca.urlshortener.api.url.exception.UrlRetrievalException;
+import com.leoluca.urlshortener.api.url.exception.*;
 import org.bson.types.ObjectId;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -56,6 +53,11 @@ public class URLService {
      */
     public String saveShortUrl(String longUrl, ObjectId userId) {
         try {
+            // Validate URL before processing
+            if (!isValidUrl(longUrl)) {
+                throw new InvalidUrlException("Invalid URL format. Please provide a valid HTTP/HTTPS URL.");
+            }
+
             Optional<URL> existingUrl = urlRepository.findByLongUrl(longUrl);
             if (existingUrl.isPresent()) {
                 return existingUrl.get().getShortCode();
@@ -72,10 +74,23 @@ public class URLService {
             urlRepository.save(url);
             logger.info("Created short URL: {} -> {}", shortCode, longUrl);
             return shortCode;
+        } catch (InvalidUrlException e) {
+            logger.warn("URL validation failed: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
             logger.error("Error saving short URL: {}", e.getMessage(), e);
             throw new UrlCreationException("Could not shorten the URL", e);
         }
+    }
+
+    /**
+     * Validates the format of a URL.
+     * @param url The URL to validate.
+     * @return True if the URL is valid, false otherwise.
+     */
+    private boolean isValidUrl(String url) {
+        String regex = "^(http|https)://.*$"; // thanks google
+        return url != null && !url.isBlank() && url.matches(regex);
     }
 
     /**

@@ -34,29 +34,8 @@ public class URLController {
      */
     @PostMapping("/shorten")
     public ResponseEntity<String> shortenUrl(@Valid @RequestBody ShortenUrlRequest request) {
-        if (!isValidUrl(request.getLongUrl())) {
-            return ResponseEntity.badRequest().body("Invalid URL format. Please provide a valid HTTP/HTTPS URL.");
-        }
-
-        // Pass the long URL and user ID to the URL service
         String shortCode = urlService.saveShortUrl(request.getLongUrl(), request.getUserId());
-
         return ResponseEntity.ok("swisscom.com/" +shortCode);
-    }
-
-    /**
-     * Helper method to validate URL format using a regex.
-     *
-     * @param url The URL to validate.
-     * @return True if the URL is valid, false otherwise.
-     */
-    private boolean isValidUrl(String url) {
-        if (url == null || url.isBlank()) {
-            return false;
-        }
-
-        String regex = "^(http|https)://.*$"; // thanks google
-        return url.matches(regex);
     }
 
     /**
