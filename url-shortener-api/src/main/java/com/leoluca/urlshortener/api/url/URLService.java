@@ -53,6 +53,9 @@ public class URLService {
      */
     public String saveShortUrl(String longUrl, ObjectId userId) {
         try {
+            // Normalize the URL
+            longUrl = normalizeUrl(longUrl);
+
             // Validate URL before processing
             if (!isValidUrl(longUrl)) {
                 throw new InvalidUrlException("Invalid URL format. Please provide a valid HTTP/HTTPS URL.");
@@ -81,6 +84,32 @@ public class URLService {
             logger.error("Error saving short URL: {}", e.getMessage(), e);
             throw new UrlCreationException("Could not shorten the URL", e);
         }
+    }
+
+    /**
+     * Normalizes a URL by converting http to https, removing www., and trailing slashes.
+     * @param url The URL to normalize.
+     * @return The normalized URL.
+     */
+    private String normalizeUrl(String url) {
+        if (url == null || url.isBlank()) {
+            throw new InvalidUrlException("URL cannot be null or empty.");
+        }
+
+        // Convert http to https
+        if (url.startsWith("http://")) {
+            url = url.replaceFirst("http://", "https://");
+        }
+
+        // Remove www.
+        url = url.replaceFirst("^(https://)?www\\.", "$1");
+
+        // Remove trailing slash
+        if (url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
+        }
+
+        return url;
     }
 
     /**
